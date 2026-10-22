@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+
+# Test coverage (node:test --experimental-test-coverage)
+coverage/
+.nyc_output/
+*.lcov
+
+# TypeScript incremental cache (harmless; we run --noEmit non-incremental)
+*.tsbuildinfo
+
+# Env
+.env
+.env.*
+!.env.example
+
+# 'npm pack' output / diagnostic reports
+*.tgz
+report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db

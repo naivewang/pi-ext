@@ -1,0 +1,34 @@
+{
+	"name": "@elvinw/pi-qq",
+	"version": "0.5.8",
+	"description": "/qq — quick side questions for pi that don't enter the conversation context (Claude Code's /btw, for pi)",
+	"keywords": [
+		"pi-package",
+		"pi",
+		"pi-extension",
+		"pi-coding-agent"
+	],
+	"license": "MIT",
+	"type": "module",
+	"files": [
+		"extensions",
+		"README.md",
+		"LICENSE"
+	],
+	"publishConfig": {
+		"access": "public"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/NaiveWang/pi-ext.git"
+	},
+	"scripts": {
+		"typecheck": "tsc --noEmit",
+		"test": "node --test \"test/**/*.test.ts\""
+	},
+	"devDependencies": {
+		"@earendil-works/pi-coding-agent": "1.4.0",
+		"@types/node": "^26.6.4",
+		"typescript": "^5.9.0"
+	}
+}

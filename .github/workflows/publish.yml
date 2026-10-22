@@ -1,0 +1,60 @@
+name: publish
+
+on:
+  push:
+    tags: ["*"]
+
+permissions:
+  contents: read
+  id-token: write
+
+# One workflow publishes every extension. A tag of the form <package-dir>/v<version>
+# routes to exactly one package; any other tag is a no-op. Each extension therefore
+# has its own independent release series (pi-qq/v0.5.8, pi-foo/v0.1.0, ...).
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      pkg: ${{ steps.t.outputs.pkg }}
+      ver: ${{ steps.t.outputs.ver }}
+      publish: ${{ steps.t.outputs.publish }}
+    steps:
+      - id: t
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          if [[ ! "$TAG" =~ ^(.+)/v(.+)$ ]]; then
+            echo "tag '$TAG' is not <package-dir>/v<version>; nothing to publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "pkg=${BASH_REMATCH[1]}" >> "$GITHUB_OUTPUT"
+          echo "ver=${BASH_REMATCH[2]}" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: resolve
+    if: needs.resolve.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Verify the tag matches the package version
+        run: |
+          P="packages/${{ needs.resolve.outputs.pkg }}/package.json"
+          test -f "$P" || { echo "no such package: ${{ needs.resolve.outputs.pkg }}"; exit 1; }
+          A=$(node -p "require('./$P').version")
+          if [ "$A" != "${{ needs.resolve.outputs.ver }}" ]; then
+            echo "version mismatch: tag=${{ needs.resolve.outputs.ver }} package=$A"
+            exit 1
+          fi
+          echo "publishing packages/${{ needs.resolve.outputs.pkg }} @ ${{ needs.resolve.outputs.ver }}"
+      - run: npm ci
+      - run: npm run typecheck -w "packages/${{ needs.resolve.outputs.pkg }}"
+      - run: npm test -w "packages/${{ needs.resolve.outputs.pkg }}"
+      - name: Publish
+        working-directory: packages/${{ needs.resolve.outputs.pkg }}
+        run: npm publish --provenance

@@ -1,0 +1,222 @@
+# pi-qq — `/qq` quick side question
+
+Ask a one-off "by the way" question **without letting the Q&A enter the ongoing
+context** — the same idea as Claude Code's `/btw`.
+
+## True deletion: dismissed threads are really gone
+
+Mainline pi's session is append-only: dismissing a `/qq` thread can at best
+move the leaf back, leaving the Q&A as a **dead branch** in the file (visible
+in `/tree`). This extension closes that gap. At load time it **additively
+installs** `pruneBranches(keepLeafId?)` on `SessionManager.prototype` —
+keeping only the root→leaf path, rebuilding pi's own index, and rewriting the
+session file. Never overriding an existing method, and only when the running
+pi version is in the verified allowlist (`config.patchTargetPiVersions`,
+currently **1.1.0, 1.2.0 and 1.4.0** — the patch touches private-by-convention
+internals, so a version is added only after confirming `SessionManager` is
+byte-identical).
+
+Dismiss and `/nvm` then drop the thread through a ladder — the first tier
+that works wins:
+
+1. **prune** (pin matches the running pi): the thread is physically removed
+   from the session file — no dead branch, same session id. (Other orphan
+   branches are tidied too.) The thread's **billed usage is preserved** as a
+   context-invisible marker at the branch point, so the tokens it really
+   spent still show in the session stats (`/cost`, footer) even though the
+   entries are gone.
+2. **rewind** (any other pi): the baseline — the thread is orphaned in the
+   tree (visible in `/tree`). There is deliberately **no fork tier**: a
+   fork would create a *duplicate session file* in `/resume` on every
+   dismiss. A one-time notice makes the degradation visible.
+
+Transient failure paths (no answer, timeouts) still use a plain rewind:
+they discard one small failed question and must not churn session files.
+
+> **Good to know:** the prune tier **rewrites your session files in place**
+> (the thread's nodes are removed from the JSONL). The patch itself is
+> in-memory only and additive — it refuses to install on any pi other than
+> the exact pinned one, and **uninstalling the extension leaves pi
+> completely untouched**. Still, if you run valuable sessions, keep your
+> usual `~/.pi` backups.
+
+## Commands
+
+| Command | Tool policy during the question |
+|---|---|
+| `/qq <question>` | prompt asks the model to use **no** tools |
+| `/qqro <question>` | prompt asks the model to use **only** read-only tools (`read`, `grep`, `find`, `ls`) |
+| `/ro` | Side thread **only**: toggle the follow-up policy between no-tools and read-only |
+| `/sub` | Side thread **only**: start a **sub-thread** from the current position. It stays part of the SAME side session (a context-invisible boundary marker shows it in `/tree` and on resume); `/nvm` and `/merge` always act on the whole session. (Named `/sub` because pi's built-in `/fork` — fork the *session* — wins the bare `/fork` exact match.) |
+| `/merge` | Side thread **only**: keep **everything** — initial `/qq` + every follow-up + every sub-thread — as conversation. The side session becomes mainline, the mode ends, and the next message continues right after the last answer. |
+| `/nvm` | Side thread **only**: **never mind** — exit the mode and rewind the whole side session (initial `/qq` + follow-ups + sub-threads) to its first question, as if it never happened |
+
+The side thread is visible everywhere:
+
+- **Input box**: while the thread is open, the editor's top border becomes a
+  "qq side thread — … /ro read-only · /sub sub-thread · /merge to main · /nvm back"
+  title (live: the sub-thread depth updates on `/sub`) and the footer status
+  shows the live tool policy and depth.
+- **Command list**: hidden == not dispatchable. Inside the thread `/qq` and
+  `/qqro` disappear from the list **and do not run either** (plain text is
+  the question now). `/ro`, `/sub`, `/merge` and `/nvm` are not registered
+  commands at all — an input-level handler owns them while the thread is
+  open, and outside it they pass through to the model as ordinary messages,
+  exactly like any unknown slash text. A **mistyped** mode command
+  (`/nvm'`, `/subx`, …) is a typo, not a command: inside the thread it runs
+  as a follow-up question (the box IS the side conversation), with a note
+  telling you the exact spelling.
+
+Neither command touches the active tool set: the side request is a
+byte-identical prefix extension of your last turn, so on llama.cpp/vLLM it
+costs **zero extra prefill** (the server's prefix cache only grows, and the
+cache is still intact for the next main turn). Tool policy is two-layer:
+
+1. the prompt asks the model to comply (no tools / read-only only), and
+2. a hard guardrail **blocks any out-of-policy tool call before it executes**
+   — the model receives the block reason as a tool error and falls back to
+   answering in text. A rogue `write`/`bash` can never run during a side
+   question.
+
+## How it works
+
+The Q&A takes over the transcript like a normal turn and **stays there** until
+you decide its fate.
+
+- **First answer** → a keypress gate: **f** open the side thread, **m** merge
+  it into the conversation, **d** dismiss it. Any other key is ignored (the
+  gate stays armed, so a stray press can't dismiss by accident).
+- **In the thread** → no keypress. Plain text is the next follow-up; `/ro`
+  toggles policy, `/sub` starts a sub-thread, `/merge` keeps it all, `/nvm`
+  drops it. A normal (non-`/qq`) message absorbs the thread — it can never be
+  rewound away again.
+- **Mechanically** — a pi session is an append-only tree and the model context
+  is the root→leaf path. `/qq` sends the question onto a temporary side
+  branch, waits for the run to settle, then on dismiss/`/nvm` drops the whole
+  branch at its root (prune on a pinned pi, rewind otherwise); on merge it
+  simply doesn't rewind.
+- **Exit mid-thread** → the thread survives in the session file and is
+  re-detected on the next start (answered → re-enters the mode; merged or
+  absorbed → not re-opened).
+
+## Compaction safety
+
+A side question must never compact the **main** conversation. During a side
+turn pi-qq cancels auto-compaction, waits for true idle before rewinding
+(`navigateTree` refuses while busy), warns up front at ≥ 90% of the context
+window, and notifies if a rewind fails. The side request still sends the full
+current context (the model needs it) — what `/qq` saves is the recurring cost:
+the exchange never rides along in every later turn.
+
+## Install
+
+```bash
+pi install npm:@elvinw/pi-qq
+```
+
+Works on any pi: on pi **1.1.0, 1.2.0 or 1.4.0**, dismissed threads are physically
+pruned from the session file (see above); on other pi versions the extension
+automatically degrades to the plain dead-branch behavior.
+
+or from a local clone:
+
+```bash
+pi --extension ./packages/pi-qq
+```
+
+or place this directory in `~/.pi/agent/extensions/` (personal) or
+`.pi/extensions/` (project), then `/reload`.
+
+No `npm install` is needed to *run* it: the only runtime import
+(`CustomEditor`, for the mode's input-box title) is provided by pi itself
+when it loads the extension.
+
+## Development
+
+```bash
+npm install        # pulls the published pi-coding-agent 1.4.0 types + tsc
+npm run typecheck
+npm test           # 75 scenario tests (node:test, no extra deps)
+```
+
+The `pi-coding-agent` dev-dependency is **exactly pinned** (no `^`) because
+the self-patch — and the tests around it — target a verified pi version
+(1.4.0, the newest in the allowlist); it also exists for local typechecking
+against the published API.
+`node_modules/` is git-ignored.
+
+### Tests
+
+`test/` runs the extension against a **mock pi environment** (the extension
+imports pi's types only — no runtime dependency — so a mock `ExtensionAPI`
+plus an in-memory session tree exercise the real logic, no pi process
+needed). The scenario matrix covers:
+
+- **lifecycle** — send → settle → PENDING → dismiss/merge, key semantics
+  (case, d dismisses vs other keys ignored and the gate stays armed), status
+  line, prompt notes
+- **threads** — follow-up chains, context inheritance, thread absorption by
+  a normal message, orphaning via `/tree`
+- **side-thread mode** — plain-text follow-ups, **no keypress gate after a
+  follow-up answer** (the next plain text is the next follow-up), `/ro`
+  toggling (and non-reset across follow-ups), `/nvm` (with and without a
+  thread, in-flight guard), auto-exit on `/compact`/`/tree`/`/new` effects,
+  recursion guard, slash pass-through, in-flight guard, full e2e loop,
+  **near-miss** (a mistyped mode command like `/nvm'` runs as a follow-up
+  question, thread intact, and passes through as an ordinary message
+  outside the thread)
+- **sub-threads & merge** — `/sub` appends a context-invisible boundary
+  (depth shown live in the status and the editor title) and the session
+  continues; `/nvm` drops the WHOLE session (initial `/qq` + sub-threads);
+  `/merge` keeps the whole chain in order + close marker and ends the mode;
+  both pass through as ordinary messages outside the thread; both are
+  refused while a question is in flight; resume re-enters at the right
+  depth and the walker treats fork boundaries as transparent (unit-tested,
+  incl. merged/absorbed-after-sub and unanswered-after-sub)
+- **mode surface** — autocomplete hides `/qq`+`/qqro` inside the thread and
+  hidden == not dispatched (`/ro`, `/sub`, `/merge` and `/nvm` are
+  input-level, not commands, and pass through as ordinary messages outside
+  the thread); the editor border carries the live mode title in mode only
+- **failures** — no answer, settle timeout, failed question mid-thread,
+  stuck-busy rewind
+- **queue** — busy-on-call, re-settle loop, queue timeout, in-flight guard
+- **invariants** — zero leaked subscriptions on every path (including mode
+  exit), compaction cancellation, tool guardrail (block/allow matrix),
+  session swap, empty session, preflight warning
+- **resume** — pi exited mid-thread: answered thread re-enters the mode
+  (follow-up continues, `/nvm` drops the whole session, incl. sub-threads),
+  merged/absorbed threads are not re-opened, unanswered (mid-stream)
+  restore only the thread for `/nvm`, plain sessions untouched
+- **true deletion** — `installSessionPrune` on the exact pinned pi version
+  (idempotent, version-mismatch refusal) and a real `SessionManager`
+  integration test (prune keeps root→target, re-pins the leaf, rewrites the
+  file, reopens cleanly); the drop ladder on dismiss and `/nvm`
+  (prune / rewind tiers — never fork)
+
+## Safety
+
+- Tool policy is two-layer while the tool set itself stays untouched
+  (deliberate, for cache preservation): the prompt asks the model to comply,
+  and a `tool_call` guardrail blocks any out-of-policy call before it
+  executes — the model sees the block reason as a tool error and answers in
+  text instead. Nothing can write files or run commands during `/qq`.
+- If an answer is aborted or errors before producing text, only that
+  question is rewound away immediately (nothing to read); the rest of an
+  in-progress thread survives.
+- Exitting pi mid-thread never loses the thread: it is re-detected from the
+  session file on the next start (see **exit mid-thread** above). Merge
+  leaves a context-invisible close marker so a resumed session can tell a
+  merged thread from an open one.
+- `/new`, `/fork`, or quit mid-question: the wait bails out; the side branch
+  is just an orphan branch (harmless). Inside an open side thread these
+  commands (and `/compact`, `/tree` navigation) **end the mode
+  automatically** — the thread is absorbed or orphaned and plain text goes
+  back to the main conversation.
+- In side-thread mode, plain text submitted while a question is still
+  streaming is dropped with a warning (strictly serial — one question at a
+  time, single-slot llama.cpp safe).
+- Double `/qq`/`/qqro` is rejected while one is running or queued.
+- If the agent is running, the question is **queued** and runs automatically
+  when the flow settles (aborting the flow unblocks it). Still strictly
+  serial — compatible with single-slot llama.cpp (`-np 1`). A 2h wait cap
+  drops the question rather than wedging the command.

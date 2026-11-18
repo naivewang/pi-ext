@@ -144,10 +144,11 @@ export const config = {
 	 * allowlist, NOT a semver range: the patch touches private-by-convention
 	 * internals (_buildIndex, _rewriteFile, byId, fileEntries, leafId), so a
 	 * version is added only after confirming those methods are unchanged
-	 * (1.1.0, 1.2.0, 1.3.0, 1.4.0 and 1.5.0 are). On any other pi the patch
-	 * does not install and drops degrade to an in-place rewind.
+	 * (1.1.0, 1.2.0, 1.3.0, 1.4.0, and the whole 1.5 line 1.5.0–1.5.2, whose
+	 * SessionManager is byte-identical across all three). On any other pi the
+	 * patch does not install and drops degrade to an in-place rewind.
 	 */
-	patchTargetPiVersions: ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0"],
+	patchTargetPiVersions: ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.5.1", "1.5.2"],
 };
 
 // ── True deletion of dismissed threads: additive SessionManager self-patch ──

@@ -11,13 +11,15 @@ published to npm independently, tested together.
 | Package | npm | What it does |
 |---|---|---|
 | [`pi-qq`](packages/pi-qq) | [`@elvinw/pi-qq`](https://www.npmjs.com/package/@elvinw/pi-qq) | `/qq` — ask a side question that never pollutes your main conversation context (Claude Code's `/btw`, for pi). |
+| [`pi-lazy-compact`](packages/pi-lazy-compact) | [`pi-lazy-compact`](https://www.npmjs.com/package/pi-lazy-compact) | **Context-spill compaction** — zero-LLM compaction (instant, cannot 400, full-session dump) + lazy re-read via `history_pull` + bounded spill doc. Strictly deprecates pi's default LLM compaction. |
 
 ## Layout
 
 ```
 pi-ext/
 ├── packages/            # one self-contained npm package per extension
-│   └── pi-qq/           #   extensions/ + test/ + package.json  ->  published to npm
+│   ├── pi-qq/           #   extensions/ + test/ + package.json  ->  published to npm
+│   └── pi-lazy-compact/ #   extensions/ + scripts/ + test/      ->  published to npm
 ├── package.json         # private root: npm workspaces + fan-out scripts
 ├── tsconfig.base.json   # shared compilerOptions
 └── .github/workflows/   # ci.yml (combined test)  .  publish.yml (per-extension)

@@ -1,0 +1,46 @@
+{
+  "name": "pi-lazy-compact",
+  "version": "0.3.1",
+  "description": "Context-spill compaction for pi: zero-LLM compaction (instant, cannot 400, full-session dump), lazy re-read via history_pull, bounded spill doc. Strictly deprecates pi's default LLM compaction.",
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "pi-coding-agent"
+  ],
+  "license": "MIT",
+  "type": "module",
+  "files": [
+    "extensions",
+    "scripts",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/naivewang/pi-ext"
+  },
+  "pi": {
+    "extensions": [
+      "extensions/lazy-compact.ts"
+    ]
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test \"test/**/*.test.ts\""
+  },
+  "devDependencies": {
+    "@earendil-works/pi-coding-agent": "1.4.0",
+    "@types/node": "^26.6.4",
+    "typescript": "^5.9.0"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "typebox": "*"
+  },
+  "author": "elvinw"
+}
